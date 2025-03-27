@@ -55,6 +55,21 @@ pub fn main() !void {
     std.process.exit(@intFromEnum(ExitCode.usage));
 }
 
+pub fn listDir(path: []const u8) !void {
+    var gpa = std.heap.page_allocator;
+    var dir = try std.fs.cwd().openIterableDir(path, .{});
+    defer dir.close();
+
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (entry.kind == .file) {
+            std.debug.print("file: {s}\n", .{entry.name});
+        } else if (entry.kind == .directory) {
+            std.debug.print("dir:  {s}/\n", .{entry.name});
+        }
+    }
+}
+
 pub fn help() !void {
     try std.io.getStdOut().writeAll("hexseq - hexadecimal log rotator\n\n");
     try std.io.getStdOut().writeAll("Usage: hexseq [options]\n\n");
@@ -110,8 +125,8 @@ test "dec2hex gives correct 3-digit uppercase hex values" {
     //     |        +- For loops only interate over usize. -- No other data types
     //     |        |            +- We saying to convert to u16 with a builtin
     //for (0..100) |i| {         |
-    //    const hex1 = dec2hex(@as(u16, @intCast(i))); -- Because usize (64 bit int on my system)
-    //    try stdout.print("hex value {s}\n", .{&hex1});  couldn't map to all possible values of a u16
-    //}                                                   we must tell the compiler that it is safe to cast down.
+    //    const hex1 = dec2hex(@as(u16, @intCast(i))); --| Because usize (64 bit int on my system)
+    //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
+    //}                                                  | we must tell the compiler that it is safe to cast down.
 
 }
