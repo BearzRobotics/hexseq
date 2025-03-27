@@ -1,8 +1,10 @@
 const std = @import("std");
+const testing = std.testing;
 const stdout = std.io.getStdOut().writer();
 
 var debug = false;
 const version = "0.0.1";
+const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 /// Follow the linux sysexit.h where applicable
 /// https://man7.org/linux/man-pages/man3/sysexits.h.3head.html
@@ -70,17 +72,19 @@ pub fn help() !void {
 // and used a lookup call to convert the 10-16 to the letter and had to
 // do string maninpulation. -- Zig has first class support for hex. So
 // I don't want to convert to string until I build the finial file name.
-pub fn dec2hex(input: u16) void {
-    // initalize are variables and assgin default values.
-    var remainder = 0;
-    var buffer = [_]u8{0} ** 3; // is an array that is initialized with 3 zeros
+pub fn dec2hex(input: u16) [3]u8 {
     var index: usize = 3;
-    while (input != 0) {
+    var value = input;
+    var buffer = [_]u8{ '0', '0', '0' };
+
+    while (index > 0) {
         index -= 1;
-        remainder = input % 16;
-        buffer[index] = remainder;
-        input = input / 16;
+        buffer[index] = hex[value % 16];
+        value = value / 16;
+        if (value == 0) break;
     }
+
+    return buffer;
 }
 
 pub fn hex2dec() void {}
@@ -89,5 +93,25 @@ pub fn getFiles() void {}
 
 pub fn writeFiles() void {}
 
-// This test is to ensure that the program works as expected
-test "simple test" {}
+// This test pics random decimal values and makes sure that the correct
+// hex value is being returned.
+test "dec2hex gives correct 3-digit uppercase hex values" {
+    try testing.expectEqualStrings("000", &dec2hex(0));
+    try testing.expectEqualStrings("00F", &dec2hex(15));
+    try testing.expectEqualStrings("010", &dec2hex(16));
+    try testing.expectEqualStrings("2AF", &dec2hex(687));
+    try testing.expectEqualStrings("3E7", &dec2hex(999));
+    try testing.expectEqualStrings("FFF", &dec2hex(4095));
+
+    // This test replaced this block of code.
+    // https://ziggit.dev/t/for-loop-counter-other-than-usize/4744/2
+    //
+    //     +- Range doesn't include end number by defualt. last one processed is 99.
+    //     |        +- For loops only interate over usize. -- No other data types
+    //     |        |            +- We saying to convert to u16 with a builtin
+    //for (0..100) |i| {         |
+    //    const hex1 = dec2hex(@as(u16, @intCast(i))); -- Because usize (64 bit int on my system)
+    //    try stdout.print("hex value {s}\n", .{&hex1});  couldn't map to all possible values of a u16
+    //}                                                   we must tell the compiler that it is safe to cast down.
+
+}
