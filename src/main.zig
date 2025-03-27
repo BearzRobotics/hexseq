@@ -59,6 +59,7 @@ pub fn main() !void {
 
 // https://www.reddit.com/r/Zig/comments/17zy769/just_an_example_of_listing_directory_contents/
 // https://gist.github.com/neeraj9/77b29dadaf5a4be5b81775532e3f23b6
+// https://ziglang.org/documentation/0.14.0/std/#std.fs.Dir.openDir
 pub fn listDir(path: []const u8) !void {
     var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
     defer dir.close();
