@@ -3,7 +3,7 @@ const testing = std.testing;
 const stdout = std.io.getStdOut().writer();
 
 var debug = false;
-const version = "0.0.1";
+const version = "0.0.2";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 /// Follow the linux sysexit.h where applicable
@@ -114,15 +114,25 @@ pub fn dec2hex(input: u16) [3]u8 {
 // we need to multiply starting from the least significant digit
 // (right) each number by an increasing power of 16. e.g. DA145
 // (5 * 16^0) + (4 * 16^1) + (1 * 16^2) + (10 * 16^3) + (13 * 16^4)
-pub fn hex2dec(input: [3]u8) u16 {
-    var output = 0;
+pub fn hex2dec(input: []const u8) u16 {
+    var output: u16 = 0; // by default a zero is comptime value. -- must have a definate type to be modifyed at runtime
+    var buf = [_]u8{ '0', '0', '0' };
+
+    // first we need to convert the hex array to actual digits
+    for (input, 0..) |char, j| {
+        for (hex, 0..) |h, i| {
+            if (char == h) {
+                buf[j] = @as(u8, @intCast(i));
+            }
+        }
+    }
 
     // we know 16^2 is the higest number we'll be dealing with
     // were going to built this backwards
     // (0 x 16^2) + (1 * 16^1) + (2 * 16^0)
     // in is a [3]u8 -- digit is it's value. i always start @ 0 and counts up.
-    for (input, 0..) |digit, i| {
-        const power = 2 - @as(u32, i);
+    for (buf, 0..) |digit, i| {
+        const power = 2 - @as(u16, @intCast(i));
         output += @as(u16, digit) * std.math.pow(u16, 16, power);
     }
     return output;
@@ -141,6 +151,31 @@ test "dec2hex gives correct 3-digit uppercase hex values" {
     try testing.expectEqualStrings("2AF", &dec2hex(687));
     try testing.expectEqualStrings("3E7", &dec2hex(999));
     try testing.expectEqualStrings("FFF", &dec2hex(4095));
+
+    // This test replaced this block of code.
+    // https://ziggit.dev/t/for-loop-counter-other-than-usize/4744/2
+    //
+    //     +- Range doesn't include end number by defualt. last one processed is 99.
+    //     |        +- For loops only interate over usize. -- No other data types
+    //     |        |            +- We saying to convert to u16 with a builtin
+    //for (0..100) |i| {         |
+    //    const hex1 = dec2hex(@as(u16, @intCast(i))); --| Because usize (64 bit int on my system)
+    //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
+    //}                                                  | we must tell the compiler that it is safe to cast down.
+
+}
+
+test "hex2dec right u16 output" {
+    try testing.expectEqual(0, hex2dec("000"));
+    try testing.expectEqual(15, hex2dec("00F"));
+    try testing.expectEqual(16, hex2dec("010"));
+    try testing.expectEqual(687, hex2dec("2AF"));
+    try testing.expectEqual(999, hex2dec("3E7"));
+    try testing.expectEqual(4095, hex2dec("FFF"));
+    try testing.expectEqual(1, hex2dec("001"));
+    try testing.expectEqual(255, hex2dec("0FF"));
+    try testing.expectEqual(409, hex2dec("199"));
+    try testing.expectEqual(2748, hex2dec("ABC"));
 
     // This test replaced this block of code.
     // https://ziggit.dev/t/for-loop-counter-other-than-usize/4744/2
