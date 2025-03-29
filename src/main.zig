@@ -26,8 +26,18 @@ const ExitCode = enum(u8) {
 };
 
 pub fn main() !void {
-    // we need an allocator
-    //const allocator = std.heap.page_allocator;
+    // we need an allocator for our dynamic array of files.
+    // From reading on different sites and docs this allocator can be swapped out.
+    // so If I decied to change from gpa to something else, I merely need to update
+    // what the allocator variable is pointing to.
+    // https://zig.guide/standard-library/allocators/
+    // https://ziglang.org/documentation/0.14.0/std/#std.process.ArgIteratorGeneral
+    //const gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // we setup gpa to panic on memery leaks.
+    //defer if (gpa.deinit() != .ok) @panic("memory leak detected");
+    // We need to make are gpa usable when passing an allocator to we create a const and pass reference to our gpa
+    //const allocator = &gpa.allocator;
+
     var args = std.process.args();
     while (args.next()) |arg| {
         // unlike in other languages where you can compare the arg to a string
@@ -51,7 +61,8 @@ pub fn main() !void {
         }
     }
 
-    try listDir("/home/dakota");
+    // we we get the recursive function working delete this code and it's function
+    //try listDir("/home/dakota");
 
     try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
     std.process.exit(@intFromEnum(ExitCode.usage));
@@ -60,14 +71,14 @@ pub fn main() !void {
 // https://www.reddit.com/r/Zig/comments/17zy769/just_an_example_of_listing_directory_contents/
 // https://gist.github.com/neeraj9/77b29dadaf5a4be5b81775532e3f23b6
 // https://ziglang.org/documentation/0.14.0/std/#std.fs.Dir.openDir
-pub fn listDir(path: []const u8) !void {
-    var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
-    defer dir.close();
-    var dirIterator = dir.iterate();
-    while (try dirIterator.next()) |dirContent| {
-        std.debug.print("{s}\n", .{dirContent.name});
-    }
-}
+//pub fn listDir(path: []const u8) !void {
+//    var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
+//    defer dir.close();
+//    var dirIterator = dir.iterate();
+//    while (try dirIterator.next()) |dirContent| {
+//        std.debug.print("{s}\n", .{dirContent.name});
+//    }
+//}
 
 pub fn help() !void {
     try std.io.getStdOut().writeAll("hexseq - hexadecimal log rotator\n\n");
@@ -97,11 +108,25 @@ pub fn dec2hex(input: u16) [3]u8 {
         value = value / 16;
         if (value == 0) break;
     }
-
     return buffer;
 }
 
-pub fn hex2dec() void {}
+// we need to multiply starting from the least significant digit
+// (right) each number by an increasing power of 16. e.g. DA145
+// (5 * 16^0) + (4 * 16^1) + (1 * 16^2) + (10 * 16^3) + (13 * 16^4)
+pub fn hex2dec(input: [3]u8) u16 {
+    var output = 0;
+
+    // we know 16^2 is the higest number we'll be dealing with
+    // were going to built this backwards
+    // (0 x 16^2) + (1 * 16^1) + (2 * 16^0)
+    // in is a [3]u8 -- digit is it's value. i always start @ 0 and counts up.
+    for (input, 0..) |digit, i| {
+        const power = 2 - @as(u32, i);
+        output += @as(u16, digit) * std.math.pow(u16, 16, power);
+    }
+    return output;
+}
 
 pub fn getFiles() void {}
 
