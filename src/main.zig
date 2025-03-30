@@ -185,10 +185,12 @@ pub fn getFiles(allocator: std.mem.Allocator, base: []const u8, files: *std.Arra
     while (try walker.next()) |entry| {
         // Get relative path
         const relpath = entry.path;
-
-        // Allocate a duplicate string since walk() gives temporary memory
-        const path_copy = try allocator.dupe(u8, relpath);
-        try files.append(path_copy);
+        // only grab files
+        if (entry.kind == .file) {
+            // Allocate a duplicate string since walk() gives temporary memory
+            const path_copy = try allocator.dupe(u8, relpath);
+            try files.append(path_copy);
+        }
     }
 }
 
@@ -292,5 +294,5 @@ test "getFiles pickup files in test dir" {
         std.debug.print("Files[{d}]: {s}\n", .{ i, f });
     }
 
-    //try testing.expect(files.items.len == 7); // adjust to your count
+    try testing.expect(files.items.len == 7); // adjust to your count
 }
