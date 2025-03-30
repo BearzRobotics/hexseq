@@ -10,14 +10,6 @@ zig build
 ```
 
 # testing
-
-Some test require temp files to be in place. So before running our test we need to run
-
-```console
-$ ./test_setup.sh
-```
-After running this script then run 
-
 ```console
 zig build test
 ```
