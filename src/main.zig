@@ -32,11 +32,22 @@ pub fn main() !void {
     // what the allocator variable is pointing to.
     // https://zig.guide/standard-library/allocators/
     // https://ziglang.org/documentation/0.14.0/std/#std.process.ArgIteratorGeneral
-    //const gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     // we setup gpa to panic on memery leaks.
-    //defer if (gpa.deinit() != .ok) @panic("memory leak detected");
+    defer if (gpa.deinit() != .ok) @panic("memory leak detected");
     // We need to make are gpa usable when passing an allocator to we create a const and pass reference to our gpa
-    //const allocator = &gpa.allocator;
+    const allocator = gpa.allocator();
+
+    // ArrayList themselves are not iterable. --
+    // Only slices, arrays, tuples, and vectors are iterable directly with for
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer files.deinit();
+
+    try getFiles(allocator, "/home/dakota/MyLFS", &files);
+
+    for (files.items, 0..) |f, i| {
+        std.debug.print("File[{d}]: {s}\n", .{ i, f });
+    }
 
     var args = std.process.args();
     while (args.next()) |arg| {
@@ -138,7 +149,22 @@ pub fn hex2dec(input: []const u8) u16 {
     return output;
 }
 
-pub fn getFiles() void {}
+pub fn getFiles(allocator: std.mem.Allocator, base: []const u8, files: *std.ArrayList([]const u8)) !void {
+    var dir = try std.fs.cwd().openDir(base, .{ .iterate = true });
+    defer dir.close();
+
+    var walker = try dir.walk(allocator);
+    defer walker.deinit();
+
+    while (try walker.next()) |entry| {
+        // Get relative path
+        const relpath = entry.path;
+
+        // Allocate a duplicate string since walk() gives temporary memory
+        const path_copy = try allocator.dupe(u8, relpath);
+        try files.append(path_copy);
+    }
+}
 
 pub fn writeFiles() void {}
 
