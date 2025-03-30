@@ -59,7 +59,15 @@ pub fn main() !void {
     // ArrayList themselves are not iterable. --
     // Only slices, arrays, tuples, and vectors are iterable directly with for
     var files = std.ArrayList([]const u8).init(allocator);
-    defer files.deinit();
+
+    // manually duplicating strings into the heap. These won't be automatically freed when files.deinit() is called —
+    // I have to free each string myself, like this:
+    defer {
+        for (files.items) |file| {
+            allocator.free(file);
+        }
+        files.deinit();
+    }
 
     try getFiles(allocator, "/home/dakota/MyLFS", &files);
 
@@ -232,4 +240,57 @@ test "hex2dec right u16 output" {
     //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
     //}                                                  | we must tell the compiler that it is safe to cast down.
 
+}
+
+test "getFiles pickup files in test dir" {
+    // Get the allocator
+    const allocator = std.testing.allocator;
+
+    // create a temp dir for testing
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    // If you want to make the temp dir persistance
+    //const tmp = std.testing.tmpDir(.{});
+
+    const root = tmp.dir;
+
+    // get the path of our temp dir
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    //std.debug.print("The absolute temp dir is: {s}\n", .{tmp_path});
+    defer allocator.free(tmp_path);
+
+    // every expresssion that returns a value must be used. -- I don't care
+    // bout the return value here so i'm telling the compiler with _ = to discard it
+    _ = try root.createFile("dmesg", .{});
+    _ = try root.createFile("dmesg.000", .{});
+
+    // create subdir and files
+    const subdir = try root.makeOpenPath("tlog", .{});
+    _ = try subdir.createFile("app.log", .{});
+    _ = try subdir.createFile("app.log.001", .{});
+    _ = try subdir.createFile("app.log.0F7", .{});
+
+    const subdir2 = try root.makeOpenPath("log", .{});
+    _ = try subdir2.createFile("bearz.log", .{});
+    _ = try subdir2.createFile("bearz.log.001", .{});
+    _ = try subdir2.createFile("bearz.log.002", .{});
+
+    // know lets build an array of them.
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (files.items) |file| {
+            allocator.free(file);
+        }
+        files.deinit();
+    }
+
+    // lets run the files
+    try getFiles(allocator, tmp_path, &files);
+
+    // debugging print
+    for (files.items, 0..) |f, i| {
+        std.debug.print("Files[{d}]: {s}\n", .{ i, f });
+    }
+
+    //try testing.expect(files.items.len == 7); // adjust to your count
 }
