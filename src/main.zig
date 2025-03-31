@@ -51,13 +51,8 @@ pub fn main() !void {
         files.deinit();
     }
 
-    try getFiles(allocator, "/home/dakota/MyLFS", &files);
-
-    for (files.items, 0..) |f, i| {
-        std.debug.print("File[{d}]: {s}\n", .{ i, f });
-    }
-
     var args = std.process.args();
+    defer args.deinit();
     while (args.next()) |arg| {
         // unlike in other languages where you can compare the arg to a string
         // in zig we are not allowed to do that
@@ -72,33 +67,28 @@ pub fn main() !void {
             try stdout.print("hexseq version: {s}\n", .{version});
             dklib.exit_with(dklib.ExitCode.ok);
         } else if (std.mem.eql(u8, arg, "--logdir")) {
-            try stdout.print("hexseq version: {s}\n", .{version});
+            const logdir = args.next() orelse {
+                try std.io.getStdErr().writeAll("Missing path after --logdir \n");
+                dklib.exit_with(dklib.ExitCode.usage);
+            };
+            try getFiles(allocator, logdir, &files);
+
+            if (debug == true) {
+                for (files.items, 0..) |f, i| {
+                    std.debug.print("File[{d}]: {s}\n", .{ i, f });
+                }
+            }
         } else if (std.mem.eql(u8, arg, "--rollover=delete")) {
             try stdout.print("hexseq version: {s}\n", .{version});
         } else if (std.mem.eql(u8, arg, "--rollover=move")) {
             try stdout.print("hexseq version: {s}\n", .{version});
             dklib.exit_with(dklib.ExitCode.ok);
+        } else if (arg.len == 0) {
+            try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
+            dklib.exit_with(dklib.ExitCode.usage);
         }
     }
-
-    // we we get the recursive function working delete this code and it's function
-    //try listDir("/home/dakota");
-
-    try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
-    dklib.exit_with(dklib.ExitCode.usage);
 }
-
-// https://www.reddit.com/r/Zig/comments/17zy769/just_an_example_of_listing_directory_contents/
-// https://gist.github.com/neeraj9/77b29dadaf5a4be5b81775532e3f23b6
-// https://ziglang.org/documentation/0.14.0/std/#std.fs.Dir.openDir
-//pub fn listDir(path: []const u8) !void {
-//    var dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
-//    defer dir.close();
-//    var dirIterator = dir.iterate();
-//    while (try dirIterator.next()) |dirContent| {
-//        std.debug.print("{s}\n", .{dirContent.name});
-//    }
-//}
 
 pub fn help() !void {
     try std.io.getStdOut().writeAll("hexseq - hexadecimal log rotator\n\n");
@@ -177,6 +167,7 @@ pub fn getFiles(allocator: std.mem.Allocator, base: []const u8, files: *std.Arra
     }
 }
 
+// The last function called to write all new files
 pub fn writeFiles() void {}
 
 // This test pics random decimal values and makes sure that the correct

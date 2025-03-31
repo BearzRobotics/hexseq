@@ -40,6 +40,10 @@
             .url = "git+https://github.com/BearzRobotics/dklib#d09fcdd850525443c67feb59369a978fadcb245a",
             .hash = "dklib-0.0.2-sUK1XeVxAAB9sulYVD8hoxLMdcBMCx1nmrDrBpiShZ9u",
         },
+        .clap = .{
+            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.10.0.tar.gz",
+            .hash = "clap-0.10.0-oBajB434AQBDh-Ei3YtoKIRxZacVPF1iSwp3IX_ZB8f0",
+        },
     },
     .paths = .{
         "build.zig",
