@@ -37,8 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .dklib = .{
-            .url = "git+https://github.com/BearzRobotics/dklib#b91266c33f73596860e5916399875f6006ef8597",
-            .hash = "dklib-0.0.2-sUK1XcZxAADm2qdTuHjbVDKC4mxznGe1BcoQQRmLHDuR",
+            .url = "git+https://github.com/BearzRobotics/dklib#d09fcdd850525443c67feb59369a978fadcb245a",
+            .hash = "dklib-0.0.2-sUK1XeVxAAB9sulYVD8hoxLMdcBMCx1nmrDrBpiShZ9u",
         },
     },
     .paths = .{
