@@ -17,31 +17,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const dklib = @import("dklib");
 const testing = std.testing;
 const stdout = std.io.getStdOut().writer();
 
 var debug = false;
 const version = "0.0.2";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-
-/// Follow the linux sysexit.h where applicable
-/// https://man7.org/linux/man-pages/man3/sysexits.h.3head.html
-const ExitCode = enum(u8) {
-    ok = 0, // EX_OK — success
-    usage = 64, // EX_USAGE — bad command line
-    data_err = 65, // EX_DATAERR — input data error
-    no_input = 66, // EX_NOINPUT — missing log file/dir
-    no_perm = 77, // EX_NOPERM — permission denied
-    config_err = 78, // EX_CONFIG — bad or missing config file
-    unavailable = 69, // EX_UNAVAILABLE — e.g., cannot lock file or resource
-    temp_fail = 75, // EX_TEMPFAIL — retryable error (e.g., filesystem busy)
-    software = 70, // EX_SOFTWARE — internal logic error (panic)
-
-    // Optional custom ones (safe range: 80–99)
-    rollover_failed = 80, // custom: couldn't move or delete .000–.FFF
-    scan_failed = 81, // custom: directory walk failed
-    fs_write_err = 82, // custom: couldn't write index or update state
-};
 
 pub fn main() !void {
     // we need an allocator for our dynamic array of files.
@@ -88,13 +70,14 @@ pub fn main() !void {
             try help();
         } else if (std.mem.eql(u8, arg, "-v") or std.mem.eql(u8, arg, "--version")) {
             try stdout.print("hexseq version: {s}\n", .{version});
+            dklib.exit_with(dklib.ExitCode.ok);
         } else if (std.mem.eql(u8, arg, "--logdir")) {
             try stdout.print("hexseq version: {s}\n", .{version});
         } else if (std.mem.eql(u8, arg, "--rollover=delete")) {
             try stdout.print("hexseq version: {s}\n", .{version});
         } else if (std.mem.eql(u8, arg, "--rollover=move")) {
             try stdout.print("hexseq version: {s}\n", .{version});
-            std.process.exit(@intFromEnum(ExitCode.ok));
+            dklib.exit_with(dklib.ExitCode.ok);
         }
     }
 
@@ -102,7 +85,7 @@ pub fn main() !void {
     //try listDir("/home/dakota");
 
     try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
-    std.process.exit(@intFromEnum(ExitCode.usage));
+    dklib.exit_with(dklib.ExitCode.usage);
 }
 
 // https://www.reddit.com/r/Zig/comments/17zy769/just_an_example_of_listing_directory_contents/
@@ -126,7 +109,7 @@ pub fn help() !void {
     try std.io.getStdOut().writeAll("--logdir <path>           Takes a path to the root of your log dir\n");
     try std.io.getStdOut().writeAll("--rollover=delete         When you reach .FFF it deletes all old logs and starts fresh at .000\n");
     try std.io.getStdOut().writeAll("--rollover=move <path>    Moves all old logs once you reach .FFF to a dir of your choice\n");
-    std.process.exit(@intFromEnum(ExitCode.ok));
+    dklib.exit_with(dklib.ExitCode.ok);
 }
 
 // Convert dec to hex.
@@ -217,6 +200,7 @@ test "dec2hex gives correct 3-digit uppercase hex values" {
     //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
     //}                                                  | we must tell the compiler that it is safe to cast down.
 
+    std.debug.print("\x1b[32mPASSED:\x1b[0m dec2hex gives correct 3-digit uppercase hex values\n", .{});
 }
 
 test "hex2dec right u16 output" {
@@ -242,6 +226,7 @@ test "hex2dec right u16 output" {
     //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
     //}                                                  | we must tell the compiler that it is safe to cast down.
 
+    std.debug.print("\x1b[32mPASSED:\x1b[0m hex2dec right u16 output\n", .{});
 }
 
 test "getFiles pickup files in test dir" {
@@ -294,5 +279,6 @@ test "getFiles pickup files in test dir" {
         std.debug.print("Files[{d}]: {s}\n", .{ i, f });
     }
 
-    try testing.expect(files.items.len == 7); // adjust to your count
+    try testing.expect(files.items.len == 8); // adjust to your count -- // 1 based not 0
+    std.debug.print("\x1b[32mPASSED:\x1b[0m getFiles pickup files in test dir\n", .{});
 }
