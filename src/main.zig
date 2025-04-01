@@ -185,8 +185,7 @@ pub fn findCurrentLog(allocator: std.mem.Allocator, files: *std.ArrayList([]cons
     var currentLogs = std.ArrayList([]const u8).init(allocator);
     // because we are returning this the defer should be where the function is called.
 
-    for (files.items, 0..) |f, i| {
-        _ = i; // Don't know what to do with I, as I got f.
+    for (files.items) |f| {
         // https://ziglang.org/documentation/0.14.0/std/#std.mem.lastIndexOf
         if (std.mem.lastIndexOf(u8, f, ".")) |dot_index| {
             const suffix = f[dot_index + 1 ..];
@@ -204,11 +203,28 @@ pub fn findCurrentLog(allocator: std.mem.Allocator, files: *std.ArrayList([]cons
             try currentLogs.append(f);
         }
     }
-
     return currentLogs;
 }
 
-//pub fn countLogs(allocator: std.mem.Allocator, currentLogs: std.ArrayList([]const u8), files: std.ArrayList([]const u8)) u16 {}
+pub fn countLogs(currentLogs: []const u8, files: std.ArrayList([]const u8)) u16 {
+    var oLC: u16 = 0;
+
+    for (files.items) |f| {
+        if (std.mem.lastIndexOf(u8, f, ".")) |dot_index| {
+            const suffix = f[dot_index + 1 ..];
+            if (suffix.len == 3 and
+                std.ascii.isHex(suffix[0]) and
+                std.ascii.isHex(suffix[1]) and
+                std.ascii.isHex(suffix[2]) and
+                std.mem.eql(u8, currentLogs, f[0..dot_index]))
+            {
+                oLC += 1;
+            }
+        }
+    }
+
+    return oLC;
+}
 
 // The last function called to write all new files
 pub fn writeLogs() void {}
@@ -352,4 +368,33 @@ test "findCurrentLog" {
     try std.testing.expect(found_applog);
 
     dklib.dktest.passed("findCurrentLogs");
+}
+
+test "countLogs" {
+    const allocator = std.testing.allocator;
+
+    // Create an array list of files to pass into
+    // find current log
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer files.deinit();
+    _ = try files.append("/home/test/log/dmesg");
+    _ = try files.append("/home/test/log/dmesg.001");
+    _ = try files.append("/home/test/log/app.log.001");
+    _ = try files.append("/home/test/log/dmesg.002");
+    _ = try files.append("/home/test/log/app.log.000");
+    _ = try files.append("/home/test/log/dmesg.000");
+    _ = try files.append("/home/test/log/app.log.002");
+    _ = try files.append("/home/test/log/app.log.003");
+    _ = try files.append("/home/test/log/app.log");
+
+    const count = countLogs("/home/test/log/dmesg", files);
+    std.debug.print("Number of old dmesg logs: {d}\n", .{count});
+
+    const count2 = countLogs("/home/test/log/app.log", files);
+    std.debug.print("Number of old app.log logs: {d}\n", .{count2});
+
+    try std.testing.expectEqual(3, count);
+    try std.testing.expectEqual(4, count2);
+
+    dklib.dktest.passed("CountLogs");
 }
