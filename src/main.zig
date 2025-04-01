@@ -17,9 +17,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const dklib = @import("dklib");
 const testing = std.testing;
 const stdout = std.io.getStdOut().writer();
+
+// mine
+const dklib = @import("dklib");
+
+//3rd party
 
 var debug = false;
 const version = "0.0.2";
@@ -43,7 +47,7 @@ pub fn main() !void {
     var files = std.ArrayList([]const u8).init(allocator);
 
     // manually duplicating strings into the heap. These won't be automatically freed when files.deinit() is called —
-    // I have to free each string myself, like this:
+    // I have to free each string myself, like this, but only when .dupe() is used:
     defer {
         for (files.items) |file| {
             allocator.free(file);
@@ -71,11 +75,20 @@ pub fn main() !void {
                 try std.io.getStdErr().writeAll("Missing path after --logdir \n");
                 dklib.exit_with(dklib.ExitCode.usage);
             };
-            try getFiles(allocator, logdir, &files);
-
+            try getLogs(allocator, logdir, &files);
             if (debug == true) {
                 for (files.items, 0..) |f, i| {
                     std.debug.print("File[{d}]: {s}\n", .{ i, f });
+                }
+            }
+
+            const currentLogs = try findCurrentLog(allocator, &files);
+            // must use try and get rid of the err union, before this works
+            // If you free this in the findCurrentLog() you'll get a double free error.
+            defer currentLogs.deinit();
+            if (debug == true) {
+                for (currentLogs.items, 0..) |f, i| {
+                    std.debug.print("currentlogs[{d}]: {s}\n", .{ i, f });
                 }
             }
         } else if (std.mem.eql(u8, arg, "--rollover=delete")) {
@@ -83,11 +96,10 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--rollover=move")) {
             try stdout.print("hexseq version: {s}\n", .{version});
             dklib.exit_with(dklib.ExitCode.ok);
-        } else if (arg.len == 0) {
-            try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
-            dklib.exit_with(dklib.ExitCode.usage);
         }
     }
+    try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
+    dklib.exit_with(dklib.ExitCode.usage);
 }
 
 pub fn help() !void {
@@ -148,7 +160,7 @@ pub fn hex2dec(input: []const u8) u16 {
     return output;
 }
 
-pub fn getFiles(allocator: std.mem.Allocator, base: []const u8, files: *std.ArrayList([]const u8)) !void {
+pub fn getLogs(allocator: std.mem.Allocator, base: []const u8, files: *std.ArrayList([]const u8)) !void {
     var dir = try std.fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
 
@@ -161,14 +173,45 @@ pub fn getFiles(allocator: std.mem.Allocator, base: []const u8, files: *std.Arra
         // only grab files
         if (entry.kind == .file) {
             // Allocate a duplicate string since walk() gives temporary memory
+            // we need to use dupe to keep the data alive past the defer of std.fs.cwd().openDir
             const path_copy = try allocator.dupe(u8, relpath);
             try files.append(path_copy);
         }
     }
 }
 
+// find current file
+pub fn findCurrentLog(allocator: std.mem.Allocator, files: *std.ArrayList([]const u8)) !std.ArrayList([]const u8) {
+    var currentLogs = std.ArrayList([]const u8).init(allocator);
+    // because we are returning this the defer should be where the function is called.
+
+    for (files.items, 0..) |f, i| {
+        _ = i; // Don't know what to do with I, as I got f.
+        // https://ziglang.org/documentation/0.14.0/std/#std.mem.lastIndexOf
+        if (std.mem.lastIndexOf(u8, f, ".")) |dot_index| {
+            const suffix = f[dot_index + 1 ..];
+            if (suffix.len == 3 and
+                std.ascii.isHex(suffix[0]) and
+                std.ascii.isHex(suffix[1]) and
+                std.ascii.isHex(suffix[2]))
+            {
+                // This is an old log file
+            } else {
+                try currentLogs.append(f);
+            }
+        } else {
+            // no dot = current log file
+            try currentLogs.append(f);
+        }
+    }
+
+    return currentLogs;
+}
+
+//pub fn countLogs(allocator: std.mem.Allocator, currentLogs: std.ArrayList([]const u8), files: std.ArrayList([]const u8)) u16 {}
+
 // The last function called to write all new files
-pub fn writeFiles() void {}
+pub fn writeLogs() void {}
 
 // This test pics random decimal values and makes sure that the correct
 // hex value is being returned.
@@ -191,7 +234,7 @@ test "dec2hex gives correct 3-digit uppercase hex values" {
     //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
     //}                                                  | we must tell the compiler that it is safe to cast down.
 
-    std.debug.print("\x1b[32mPASSED:\x1b[0m dec2hex gives correct 3-digit uppercase hex values\n", .{});
+    dklib.dktest.passed("dec2hex gives correct 3-digit uppercase hex values");
 }
 
 test "hex2dec right u16 output" {
@@ -217,10 +260,10 @@ test "hex2dec right u16 output" {
     //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
     //}                                                  | we must tell the compiler that it is safe to cast down.
 
-    std.debug.print("\x1b[32mPASSED:\x1b[0m hex2dec right u16 output\n", .{});
+    dklib.dktest.passed("hex2dec right u16 output");
 }
 
-test "getFiles pickup files in test dir" {
+test "getLogs pickup files in test dir" {
     // Get the allocator
     const allocator = std.testing.allocator;
 
@@ -263,7 +306,7 @@ test "getFiles pickup files in test dir" {
     }
 
     // lets run the files
-    try getFiles(allocator, tmp_path, &files);
+    try getLogs(allocator, tmp_path, &files);
 
     // debugging print
     for (files.items, 0..) |f, i| {
@@ -271,5 +314,5 @@ test "getFiles pickup files in test dir" {
     }
 
     try testing.expect(files.items.len == 8); // adjust to your count -- // 1 based not 0
-    std.debug.print("\x1b[32mPASSED:\x1b[0m getFiles pickup files in test dir\n", .{});
+    dklib.dktest.passed("getLogs pickup files in test dir");
 }
