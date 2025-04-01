@@ -114,6 +114,10 @@ pub fn help() !void {
     dklib.exit_with(dklib.ExitCode.ok);
 }
 
+pub fn rollOver() !void {
+    std.io.getStdErr().writeAll("roll over functionality not implemented yet!\n");
+}
+
 // Convert dec to hex.
 // When I did this in c I created an array of hex[] = "0123456789ABCDEF"
 // and used a lookup call to convert the 10-16 to the letter and had to
@@ -168,14 +172,17 @@ pub fn getLogs(allocator: std.mem.Allocator, base: []const u8, files: *std.Array
     defer walker.deinit();
 
     while (try walker.next()) |entry| {
-        // Get relative path
-        const relpath = entry.path;
         // only grab files
         if (entry.kind == .file) {
+            // base + entry.path (relative path.
+            const fPath = try std.fs.path.join(allocator, &.{ base, entry.path });
+
             // Allocate a duplicate string since walk() gives temporary memory
             // we need to use dupe to keep the data alive past the defer of std.fs.cwd().openDir
-            const path_copy = try allocator.dupe(u8, relpath);
+            const path_copy = try allocator.dupe(u8, fPath);
             try files.append(path_copy);
+
+            allocator.free(fPath);
         }
     }
 }
@@ -227,7 +234,26 @@ pub fn countLogs(currentLogs: []const u8, files: std.ArrayList([]const u8)) u16 
 }
 
 // The last function called to write all new files
-pub fn writeLogs() void {}
+pub fn writeLogs(allocator: std.mem.Allocator, cLogs: std.ArrayList([]const u8), files: std.ArrayList([]const u8)) !void {
+    for (cLogs.items) |c| {
+        const count = countLogs(c, files);
+        const nhex = dec2hex(count);
+
+        // More zig appropriate way to build new strings
+        const new_name = try std.mem.concat(allocator, u8, &.{ c, "."[0..], nhex[0..] });
+        // free temporary string
+        defer allocator.free(new_name);
+
+        //if (debug == true) {
+        std.debug.print("New files to be writtn: {s}\n", .{new_name});
+        //}
+
+        try std.fs.cwd().rename(c, new_name);
+        // requires c style strings.
+        //std.os.linux.rename(c, new_name);
+
+    }
+}
 
 // This test pics random decimal values and makes sure that the correct
 // hex value is being returned.
@@ -397,4 +423,79 @@ test "countLogs" {
     try std.testing.expectEqual(4, count2);
 
     dklib.dktest.passed("CountLogs");
+}
+
+test "writeLogs" {
+    // Obvioiusly I'm going to have to create a temp directory and then run
+    // through the whole program in this one test.
+
+    const allocator = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_path);
+    //std.debug.print("The absolute temp dir is: {s}\n", .{tmp_path});
+
+    // create some base files
+    _ = try tmp.dir.createFile("dmesg", .{});
+    _ = try tmp.dir.createFile("app.log", .{});
+
+    for (0..20) |i| {
+        const nhex = dec2hex(@as(u16, @intCast(i)));
+        const new_name = try std.mem.concat(allocator, u8, &.{ "dmesg"[0..], "."[0..], nhex[0..] });
+
+        defer allocator.free(new_name);
+        _ = try tmp.dir.createFile(new_name, .{});
+    }
+
+    for (0..10) |i| {
+        const nhex = dec2hex(@as(u16, @intCast(i)));
+        const new_name = try std.mem.concat(allocator, u8, &.{ "app.log"[0..], "."[0..], nhex[0..] });
+
+        defer allocator.free(new_name);
+        _ = try tmp.dir.createFile(new_name, .{});
+    }
+
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (files.items) |file| {
+            allocator.free(file);
+        }
+        files.deinit();
+    }
+
+    try getLogs(allocator, tmp_path, &files);
+    for (files.items, 0..) |f, i| {
+        std.debug.print("File[{d}]: {s}\n", .{ i, f });
+    }
+
+    const currentLogs = try findCurrentLog(allocator, &files);
+    defer currentLogs.deinit();
+
+    try writeLogs(allocator, currentLogs, files);
+
+    var nfiles = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (nfiles.items) |file| {
+            allocator.free(file);
+        }
+        nfiles.deinit();
+    }
+
+    try getLogs(allocator, tmp_path, &nfiles);
+    for (nfiles.items, 0..) |f, i| {
+        std.debug.print("New Files[{d}]: {s}\n", .{ i, f });
+    }
+
+    const dPath = try std.fs.path.join(allocator, &.{ tmp_path, "dmesg.014" });
+    const aPath = try std.fs.path.join(allocator, &.{ tmp_path, "app.log.00A" });
+
+    try tmp.dir.access(dPath, .{});
+    try tmp.dir.access(aPath, .{});
+
+    allocator.free(dPath);
+    allocator.free(aPath);
+    dklib.dktest.passed("writeLogs");
 }
