@@ -316,3 +316,40 @@ test "getLogs pickup files in test dir" {
     try testing.expect(files.items.len == 8); // adjust to your count -- // 1 based not 0
     dklib.dktest.passed("getLogs pickup files in test dir");
 }
+
+test "findCurrentLog" {
+    const allocator = std.testing.allocator;
+
+    // Create an array list of files to pass into
+    // find current log
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer files.deinit();
+    _ = try files.append("/home/test/log/dmesg");
+    _ = try files.append("/home/test/log/dmesg.001");
+    _ = try files.append("/home/test/log/app.log.001");
+    _ = try files.append("/home/test/log/dmesg.002");
+    _ = try files.append("/home/test/log/app.log.000");
+    _ = try files.append("/home/test/log/dmesg.000");
+    _ = try files.append("/home/test/log/app.log.002");
+    _ = try files.append("/home/test/log/app.log");
+
+    const cLog = try findCurrentLog(allocator, &files);
+    defer cLog.deinit();
+
+    var found_dmesg = false;
+    var found_applog = false;
+
+    for (cLog.items) |f| {
+        std.debug.print("{s}\n", .{f});
+        if (std.mem.eql(u8, f, "/home/test/log/dmesg")) {
+            found_dmesg = true;
+        } else if (std.mem.eql(u8, f, "/home/test/log/app.log")) {
+            found_applog = true;
+        }
+    }
+
+    try std.testing.expect(found_dmesg);
+    try std.testing.expect(found_applog);
+
+    dklib.dktest.passed("findCurrentLogs");
+}
