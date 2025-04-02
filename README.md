@@ -3,6 +3,17 @@ This is a zig tool to seq files in a dir with a three digit ascii extension. FFF
 
 # Zig version 0.14.0
 
+# Running 
+Example of how to run the program
+
+```console
+hexseq -d --logdir /var/dlogs/
+```
+
+Capture the output
+```console
+hexseq -d --logdir /var/dlogs/ 2&> hexseq.log
+```
 
 # building 
 ```console
