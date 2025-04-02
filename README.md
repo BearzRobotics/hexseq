@@ -51,6 +51,7 @@ zig build --release=small
 ```console
 zig build test
 ```
+
 # Should be done
 [] Make it so the program can dected how many log dirs there are for rollover. By default it's hardcoded
    to just add .000 instead of looking. -- Can be over come by passing --rollover=move <path>

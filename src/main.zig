@@ -33,7 +33,7 @@ var rollover_need = false;
 var rollover_path_provided = false;
 var rollover_path: []const u8 = &.{}; // creates an empty path varible. -- IDK how this works yet!
 var logdir: []const u8 = &.{};
-const version = "0.0.6";
+const version = "0.0.7";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 pub fn main() !void {
@@ -147,7 +147,7 @@ fn rollOver(allocator: std.mem.Allocator, base: []const u8) !void {
         try std.fs.cwd().rename(basePath, rpath);
     } else if (rollover_delete == true) {
         try std.io.getStdErr().writeAll("Warning setting this flag will just delete the log dir!\n");
-        try std.fs.cwd().deleteDir(basePath);
+        try std.fs.cwd().deleteTree(basePath);
     }
 }
 
@@ -297,11 +297,11 @@ fn writeLogs(allocator: std.mem.Allocator, cLogs: std.ArrayList([]const u8), fil
         // requires c style strings.
         //std.os.linux.rename(c, new_name);
 
-        if (count == 4095 and rollover_need == false) {
+        if (rollover_need == true and rollover_delete == true) {
+            try rollOver(allocator, logdir);
+        } else if (count == 4095 and rollover_need == false) {
             try rollOver(allocator, logdir);
         } else if (count == 4095 and rollover_need == true) {
-            try rollOver(allocator, rollover_path);
-        } else if (rollover_need == true and rollover_path_provided == true) {
             try rollOver(allocator, rollover_path);
         }
     }
@@ -644,11 +644,55 @@ test "writeLogs Manual -- rollover" {
 
     try writeLogs(allocator, currentLogs, files);
 
-    //const dPath = try std.fs.path.join(allocator, &.{ tmp_path, "dmesg.014" });
-
-    //try tmp.dir.access(dPath, .{});
-
-    //allocator.free(dPath);
-
     dklib.dktest.passed("writeLogs custom -- rollover");
+}
+
+test "writeLogs Manual -- rollover Delete" {
+    // Obvioiusly I'm going to have to create a temp directory and then run
+    // through the whole program in this one test.
+
+    debug = true;
+    rollover_need = true;
+    rollover_delete = true;
+    const allocator = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_path);
+    //std.debug.print("The absolute temp dir is: {s}\n", .{tmp_path});
+
+    const root = tmp.dir;
+
+    const subdir = try root.makeOpenPath("log", .{});
+
+    // create some base files
+    _ = try subdir.createFile("dmesg", .{});
+
+    for (0..40) |i| {
+        const nhex = dec2hex(@as(u16, @intCast(i)));
+        const new_name = try std.mem.concat(allocator, u8, &.{ "dmesg"[0..], "."[0..], nhex[0..] });
+
+        defer allocator.free(new_name);
+        _ = try subdir.createFile(new_name, .{});
+    }
+
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (files.items) |file| {
+            allocator.free(file);
+        }
+        files.deinit();
+    }
+
+    try getLogs(allocator, tmp_path, &files);
+
+    const currentLogs = try findCurrentLog(allocator, &files);
+    defer currentLogs.deinit();
+
+    logdir = tmp_path;
+    try writeLogs(allocator, currentLogs, files);
+
+    dklib.dktest.passed("writeLogs custom -- rollover Delete");
 }
