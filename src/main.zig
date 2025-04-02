@@ -28,11 +28,12 @@ const dklib = @import("dklib");
 // Probably bad practice.
 // Maybe look @ refacturing this as a struct later.
 var debug = false;
+var rollover_delete = false;
 var rollover_need = false;
 var rollover_path_provided = false;
 var rollover_path: []const u8 = &.{}; // creates an empty path varible. -- IDK how this works yet!
 var logdir: []const u8 = &.{};
-const version = "0.0.5";
+const version = "0.0.6";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 pub fn main() !void {
@@ -106,7 +107,7 @@ pub fn main() !void {
 
             try writeLogs(allocator, currentLogs, files);
         } else if (std.mem.eql(u8, arg, "--rollover=delete")) {
-            try stdout.print("hexseq version: {s}\n", .{version});
+            rollover_delete = true;
         } else if (std.mem.eql(u8, arg, "--rollover=move")) {
             rollover_need = true;
             rollover_path_provided = true;
@@ -124,26 +125,30 @@ fn rollOver(allocator: std.mem.Allocator, base: []const u8) !void {
     if (debug == true) {
         std.debug.print("Function rollOver() base: {s}\n", .{base});
     }
-
     var basePath = base; // copy to make it augmentable
-    if (rollover_path_provided == true) {
-        basePath = rollover_path;
-    } else {
-        // if logdir is passed with a trailing / we need to remove it.
+    if (rollover_delete == false) {
+        if (rollover_path_provided == true) {
+            basePath = rollover_path;
+        } else {
+            // if logdir is passed with a trailing / we need to remove it.
 
-        if (base.len > 0 and base[base.len - 1] == '/') {
-            basePath = base[0 .. base.len - 1];
+            if (base.len > 0 and base[base.len - 1] == '/') {
+                basePath = base[0 .. base.len - 1];
+            }
         }
+
+        const rpath = try std.fmt.allocPrint(allocator, "{s}.000", .{basePath});
+        defer allocator.free(rpath);
+
+        if (debug == true) {
+            std.debug.print("Rollover dir: {s}\n", .{rpath});
+        }
+
+        try std.fs.cwd().rename(basePath, rpath);
+    } else if (rollover_delete == true) {
+        try std.io.getStdErr().writeAll("Warning setting this flag will just delete the log dir!\n");
+        try std.fs.cwd().deleteDir(basePath);
     }
-
-    const rpath = try std.fmt.allocPrint(allocator, "{s}.000", .{basePath});
-    defer allocator.free(rpath);
-
-    if (debug == true) {
-        std.debug.print("Rollover dir: {s}\n", .{rpath});
-    }
-
-    try std.fs.cwd().rename(basePath, rpath);
 }
 
 fn help() !void {
