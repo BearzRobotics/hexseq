@@ -1,6 +1,13 @@
 # hexseq
 This is a zig tool to seq files in a dir with a three digit ascii extension. FFF
 
+By default hexseq will rollover the log dir once any one file reaches .FFF. If no
+directory is given with the --rollover=move <path>, the default is to rename the dir 
+given with the same hex extension.
+
+e.g. If I pass in /var/log and a file reaches .FFF it will rollover the log directory 
+into /var/log.000 ... log.FFF (If you make it that far IDK)
+
 # Zig version 0.14.0
 
 # Running 
@@ -44,3 +51,6 @@ zig build --release=small
 ```console
 zig build test
 ```
+# Should be done
+[] Make it so the program can dected how many log dirs there are for rollover. By default it's hardcoded
+   to just add .000 instead of looking. -- Can be over come by passing --rollover=move <path>

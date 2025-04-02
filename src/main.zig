@@ -25,7 +25,13 @@ const dklib = @import("dklib");
 
 //3rd party
 
+// Probably bad practice.
+// Maybe look @ refacturing this as a struct later.
 var debug = false;
+var rollover_need = false;
+var rollover_path_provided = false;
+var rollover_path: []const u8 = &.{}; // creates an empty path varible. -- IDK how this works yet!
+var logdir: []const u8 = &.{};
 const version = "0.0.5";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
@@ -76,9 +82,8 @@ pub fn main() !void {
             try help();
         } else if (std.mem.eql(u8, arg, "-v") or std.mem.eql(u8, arg, "--version")) {
             try stdout.print("hexseq version: {s}\n", .{version});
-            dklib.exit_with(dklib.ExitCode.ok);
         } else if (std.mem.eql(u8, arg, "--logdir")) {
-            const logdir = args.next() orelse {
+            logdir = args.next() orelse {
                 try std.io.getStdErr().writeAll("Missing path after --logdir \n");
                 dklib.exit_with(dklib.ExitCode.usage);
             };
@@ -103,13 +108,45 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--rollover=delete")) {
             try stdout.print("hexseq version: {s}\n", .{version});
         } else if (std.mem.eql(u8, arg, "--rollover=move")) {
-            try stdout.print("hexseq version: {s}\n", .{version});
-            dklib.exit_with(dklib.ExitCode.ok);
+            rollover_need = true;
+            rollover_path_provided = true;
+            rollover_path = args.next() orelse {
+                try std.io.getStdErr().writeAll("Missing path after --rolloever=move \n");
+                dklib.exit_with(dklib.ExitCode.usage);
+            };
         }
     }
+
+    dklib.exit_with(dklib.ExitCode.ok);
 }
 
-pub fn help() !void {
+fn rollOver(allocator: std.mem.Allocator, base: []const u8) !void {
+    if (debug == true) {
+        std.debug.print("Function rollOver() base: {s}\n", .{base});
+    }
+
+    var basePath = base; // copy to make it augmentable
+    if (rollover_path_provided == true) {
+        basePath = rollover_path;
+    } else {
+        // if logdir is passed with a trailing / we need to remove it.
+
+        if (base.len > 0 and base[base.len - 1] == '/') {
+            basePath = base[0 .. base.len - 1];
+        }
+    }
+
+    const rpath = try std.fmt.allocPrint(allocator, "{s}.000", .{basePath});
+    defer allocator.free(rpath);
+
+    if (debug == true) {
+        std.debug.print("Rollover dir: {s}\n", .{rpath});
+    }
+
+    try std.fs.cwd().rename(basePath, rpath);
+}
+
+fn help() !void {
     try std.io.getStdOut().writeAll("hexseq - hexadecimal log rotator\n\n");
     try std.io.getStdOut().writeAll("Usage: hexseq [options]\n\n");
     try std.io.getStdOut().writeAll("-h    --help              Prints help menu\n");
@@ -121,16 +158,12 @@ pub fn help() !void {
     dklib.exit_with(dklib.ExitCode.ok);
 }
 
-pub fn rollOver() !void {
-    std.io.getStdErr().writeAll("roll over functionality not implemented yet!\n");
-}
-
 // Convert dec to hex.
 // When I did this in c I created an array of hex[] = "0123456789ABCDEF"
 // and used a lookup call to convert the 10-16 to the letter and had to
 // do string maninpulation. -- Zig has first class support for hex. So
 // I don't want to convert to string until I build the finial file name.
-pub fn dec2hex(input: u16) [3]u8 {
+fn dec2hex(input: u16) [3]u8 {
     var index: usize = 3;
     var value = input;
     var buffer = [_]u8{ '0', '0', '0' };
@@ -147,7 +180,7 @@ pub fn dec2hex(input: u16) [3]u8 {
 // we need to multiply starting from the least significant digit
 // (right) each number by an increasing power of 16. e.g. DA145
 // (5 * 16^0) + (4 * 16^1) + (1 * 16^2) + (10 * 16^3) + (13 * 16^4)
-pub fn hex2dec(input: []const u8) u16 {
+fn hex2dec(input: []const u8) u16 {
     var output: u16 = 0; // by default a zero is comptime value. -- must have a definate type to be modifyed at runtime
     var buf = [_]u8{ '0', '0', '0' };
 
@@ -171,7 +204,7 @@ pub fn hex2dec(input: []const u8) u16 {
     return output;
 }
 
-pub fn getLogs(allocator: std.mem.Allocator, base: []const u8, files: *std.ArrayList([]const u8)) !void {
+fn getLogs(allocator: std.mem.Allocator, base: []const u8, files: *std.ArrayList([]const u8)) !void {
     var dir = try std.fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
 
@@ -195,7 +228,7 @@ pub fn getLogs(allocator: std.mem.Allocator, base: []const u8, files: *std.Array
 }
 
 // find current file
-pub fn findCurrentLog(allocator: std.mem.Allocator, files: *std.ArrayList([]const u8)) !std.ArrayList([]const u8) {
+fn findCurrentLog(allocator: std.mem.Allocator, files: *std.ArrayList([]const u8)) !std.ArrayList([]const u8) {
     var currentLogs = std.ArrayList([]const u8).init(allocator);
     // because we are returning this the defer should be where the function is called.
 
@@ -220,7 +253,7 @@ pub fn findCurrentLog(allocator: std.mem.Allocator, files: *std.ArrayList([]cons
     return currentLogs;
 }
 
-pub fn countLogs(currentLogs: []const u8, files: std.ArrayList([]const u8)) u16 {
+fn countLogs(currentLogs: []const u8, files: std.ArrayList([]const u8)) u16 {
     var oLC: u16 = 0;
 
     for (files.items) |f| {
@@ -241,7 +274,7 @@ pub fn countLogs(currentLogs: []const u8, files: std.ArrayList([]const u8)) u16 
 }
 
 // The last function called to write all new files
-pub fn writeLogs(allocator: std.mem.Allocator, cLogs: std.ArrayList([]const u8), files: std.ArrayList([]const u8)) !void {
+fn writeLogs(allocator: std.mem.Allocator, cLogs: std.ArrayList([]const u8), files: std.ArrayList([]const u8)) !void {
     for (cLogs.items) |c| {
         const count = countLogs(c, files);
         const nhex = dec2hex(count);
@@ -259,6 +292,13 @@ pub fn writeLogs(allocator: std.mem.Allocator, cLogs: std.ArrayList([]const u8),
         // requires c style strings.
         //std.os.linux.rename(c, new_name);
 
+        if (count == 4095 and rollover_need == false) {
+            try rollOver(allocator, logdir);
+        } else if (count == 4095 and rollover_need == true) {
+            try rollOver(allocator, rollover_path);
+        } else if (rollover_need == true and rollover_path_provided == true) {
+            try rollOver(allocator, rollover_path);
+        }
     }
 }
 
@@ -297,17 +337,6 @@ test "hex2dec right u16 output" {
     try testing.expectEqual(255, hex2dec("0FF"));
     try testing.expectEqual(409, hex2dec("199"));
     try testing.expectEqual(2748, hex2dec("ABC"));
-
-    // This test replaced this block of code.
-    // https://ziggit.dev/t/for-loop-counter-other-than-usize/4744/2
-    //
-    //     +- Range doesn't include end number by defualt. last one processed is 99.
-    //     |        +- For loops only interate over usize. -- No other data types
-    //     |        |            +- We saying to convert to u16 with a builtin
-    //for (0..100) |i| {         |
-    //    const hex1 = dec2hex(@as(u16, @intCast(i))); --| Because usize (64 bit int on my system)
-    //    try stdout.print("hex value {s}\n", .{&hex1}); | couldn't map to all possible values of a u16
-    //}                                                  | we must tell the compiler that it is safe to cast down.
 
     dklib.dktest.passed("hex2dec right u16 output");
 }
@@ -505,4 +534,116 @@ test "writeLogs" {
     allocator.free(dPath);
     allocator.free(aPath);
     dklib.dktest.passed("writeLogs");
+}
+
+test "writeLogs -- rollover" {
+    // Obvioiusly I'm going to have to create a temp directory and then run
+    // through the whole program in this one test.
+
+    debug = true;
+    const allocator = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_path);
+    //std.debug.print("The absolute temp dir is: {s}\n", .{tmp_path});
+
+    const root = tmp.dir;
+
+    const subdir = try root.makeOpenPath("log", .{});
+
+    // create some base files
+    _ = try subdir.createFile("dmesg", .{});
+
+    for (0..4095) |i| {
+        const nhex = dec2hex(@as(u16, @intCast(i)));
+        const new_name = try std.mem.concat(allocator, u8, &.{ "dmesg"[0..], "."[0..], nhex[0..] });
+
+        defer allocator.free(new_name);
+        _ = try subdir.createFile(new_name, .{});
+    }
+
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (files.items) |file| {
+            allocator.free(file);
+        }
+        files.deinit();
+    }
+
+    try getLogs(allocator, tmp_path, &files);
+
+    const currentLogs = try findCurrentLog(allocator, &files);
+    defer currentLogs.deinit();
+
+    logdir = tmp_path;
+
+    try writeLogs(allocator, currentLogs, files);
+
+    //const dPath = try std.fs.path.join(allocator, &.{ tmp_path, "dmesg.014" });
+
+    //try tmp.dir.access(dPath, .{});
+
+    //allocator.free(dPath);
+
+    dklib.dktest.passed("writeLogs -- rollover");
+}
+
+test "writeLogs Manual -- rollover" {
+    // Obvioiusly I'm going to have to create a temp directory and then run
+    // through the whole program in this one test.
+
+    debug = true;
+    rollover_need = true;
+    rollover_path_provided = true;
+    const allocator = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_path);
+    //std.debug.print("The absolute temp dir is: {s}\n", .{tmp_path});
+
+    const root = tmp.dir;
+
+    const subdir = try root.makeOpenPath("log", .{});
+
+    // create some base files
+    _ = try subdir.createFile("dmesg", .{});
+
+    for (0..4095) |i| {
+        const nhex = dec2hex(@as(u16, @intCast(i)));
+        const new_name = try std.mem.concat(allocator, u8, &.{ "dmesg"[0..], "."[0..], nhex[0..] });
+
+        defer allocator.free(new_name);
+        _ = try subdir.createFile(new_name, .{});
+    }
+
+    var files = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (files.items) |file| {
+            allocator.free(file);
+        }
+        files.deinit();
+    }
+
+    try getLogs(allocator, tmp_path, &files);
+
+    const currentLogs = try findCurrentLog(allocator, &files);
+    defer currentLogs.deinit();
+
+    rollover_path = tmp_path;
+
+    try writeLogs(allocator, currentLogs, files);
+
+    //const dPath = try std.fs.path.join(allocator, &.{ tmp_path, "dmesg.014" });
+
+    //try tmp.dir.access(dPath, .{});
+
+    //allocator.free(dPath);
+
+    dklib.dktest.passed("writeLogs custom -- rollover");
 }
