@@ -57,6 +57,13 @@ pub fn main() !void {
 
     var args = std.process.args();
     defer args.deinit();
+
+    // make sure the args are present
+    if (args.next() == null) {
+        try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
+        dklib.exit_with(dklib.ExitCode.usage);
+    }
+
     while (args.next()) |arg| {
         // unlike in other languages where you can compare the arg to a string
         // in zig we are not allowed to do that
@@ -91,6 +98,8 @@ pub fn main() !void {
                     std.debug.print("currentlogs[{d}]: {s}\n", .{ i, f });
                 }
             }
+
+            try writeLogs(allocator, currentLogs, files);
         } else if (std.mem.eql(u8, arg, "--rollover=delete")) {
             try stdout.print("hexseq version: {s}\n", .{version});
         } else if (std.mem.eql(u8, arg, "--rollover=move")) {
@@ -98,8 +107,6 @@ pub fn main() !void {
             dklib.exit_with(dklib.ExitCode.ok);
         }
     }
-    try std.io.getStdOut().writeAll("No optons supplied. Please run -h for help\n --logdir is required!\n");
-    dklib.exit_with(dklib.ExitCode.usage);
 }
 
 pub fn help() !void {
@@ -244,9 +251,9 @@ pub fn writeLogs(allocator: std.mem.Allocator, cLogs: std.ArrayList([]const u8),
         // free temporary string
         defer allocator.free(new_name);
 
-        //if (debug == true) {
-        std.debug.print("New files to be writtn: {s}\n", .{new_name});
-        //}
+        if (debug == true) {
+            std.debug.print("New files to be writtn: {s}\n", .{new_name});
+        }
 
         try std.fs.cwd().rename(c, new_name);
         // requires c style strings.
