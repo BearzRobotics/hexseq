@@ -26,7 +26,7 @@ const dklib = @import("dklib");
 //3rd party
 
 var debug = false;
-const version = "0.0.2";
+const version = "0.0.5";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 pub fn main() !void {
@@ -85,7 +85,7 @@ pub fn main() !void {
             try getLogs(allocator, logdir, &files);
             if (debug == true) {
                 for (files.items, 0..) |f, i| {
-                    std.debug.print("File[{d}]: {s}\n", .{ i, f });
+                    std.debug.print("ls /File[{d}]: {s}\n", .{ i, f });
                 }
             }
 
