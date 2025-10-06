@@ -57,11 +57,11 @@ pub fn main() !void {
         for (old_logs.items) |f| {
             allocator.free(f);
         }
-        old_logs.deinit();
+        old_logs.deinit(allocator);
     }
 
     var current_logs = try find_current_log(allocator, old_logs);
-    defer current_logs.deinit();
+    defer current_logs.deinit(allocator);
 
     try write_logs(allocator, current_logs, old_logs, cfg);
 }
@@ -85,7 +85,7 @@ fn parse_args() !Config {
                 dklib.exit_with(dklib.ExitCode.ok);
             } else if (std.mem.eql(u8, arg, "--logdir")) {
                 cfg.log_dir = args.next() orelse {
-                    try std.io.getStdErr().writeAll("Failed to pass in <path> for --logdir\n");
+                    std.debug.print("Failed to pass in <path> for --logdir\n", .{});
                     dklib.exit_with(dklib.ExitCode.usage);
                 };
                 std.debug.print("Arg Parse cfg.log_dir: {s}", .{cfg.log_dir});
@@ -95,7 +95,7 @@ fn parse_args() !Config {
             } else if (std.mem.eql(u8, arg, "--rollover=move")) {
                 cfg.rollover = RolloverEnum.move;
                 cfg.rollover_target = args.next() orelse {
-                    try std.io.getStdErr().writeAll("Failed to pass in <path> for --rollover=move \n");
+                    std.debug.print("Failed to pass in <path> for --rollover=move \n", .{});
                     dklib.exit_with(dklib.ExitCode.usage);
                 };
             } else if (std.mem.eql(u8, arg, "--preserve")) {
@@ -118,7 +118,7 @@ fn parse_args() !Config {
         std.debug.print("hexsql version: {s}\n", .{version});
         dklib.exit_with(dklib.ExitCode.ok);
     } else if (cfg.log_dir_set == false) {
-        try std.io.getStdErr().writeAll("--logdir is required!\n");
+        std.debug.print("--logdir is required!\n", .{});
         dklib.exit_with(dklib.ExitCode.usage);
     }
 
@@ -126,15 +126,21 @@ fn parse_args() !Config {
 }
 
 fn help() !void {
-    try std.io.getStdOut().writeAll("hexseq - hexadecimal log rotator\n\n");
-    try std.io.getStdOut().writeAll("Usage: hexseq [options] --logdir <path>\n\n");
-    try std.io.getStdOut().writeAll("-h    --help                       Prints help menu\n");
-    try std.io.getStdOut().writeAll("-d    --debug                      Enable printing internal debug statements to std::err\n");
-    try std.io.getStdOut().writeAll("-v    --version                    Prints the programs version\n");
-    try std.io.getStdOut().writeAll("--logdir <path>                    Takes a path to the root of your log dir\n");
-    try std.io.getStdOut().writeAll("--rollover=[delete|move] <path>    When you reach .FFF it deletes all old logs and starts fresh at .000\n");
-    try std.io.getStdOut().writeAll("                                   Moves all old logs once you reach .FFF to a dir of your choice\n");
-    try std.io.getStdOut().writeAll("-p  --preserve                     Perserve timestamps on files\n");
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
+    try stdout.print("hexseq - hexadecimal log rotator\n\n", .{});
+    try stdout.print("Usage: hexseq [options] --logdir <path>\n\n", .{});
+    try stdout.print("-h    --help                       Prints help menu\n", .{});
+    try stdout.print("-d    --debug                      Enable printing internal debug statements to std::err\n", .{});
+    try stdout.print("-v    --version                    Prints the programs version\n", .{});
+    try stdout.print("--logdir <path>                    Takes a path to the root of your log dir\n", .{});
+    try stdout.print("--rollover=[delete|move] <path>    When you reach .FFF it deletes all old logs and starts fresh at .000\n", .{});
+    try stdout.print("                                   Moves all old logs once you reach .FFF to a dir of your choice\n", .{});
+    try stdout.print("-p  --preserve                     Perserve timestamps on files\n", .{});
+
+    try stdout.flush(); // Don't forget to flush!
     dklib.exit_with(dklib.ExitCode.ok);
 }
 
@@ -155,7 +161,7 @@ fn dec2hex(input: u16) []const u8 {
 }
 
 fn get_logs(allocator: std.mem.Allocator, cfg: Config) !std.ArrayList([]const u8) {
-    var logs = std.ArrayList([]const u8).init(allocator);
+    var logs = std.ArrayList([]const u8).empty;
 
     std.debug.print("cfg.log_dir: {s}\n", .{cfg.log_dir});
     var dir = try std.fs.openDirAbsolute(cfg.log_dir, .{ .iterate = true });
@@ -179,7 +185,7 @@ fn get_logs(allocator: std.mem.Allocator, cfg: Config) !std.ArrayList([]const u8
                 std.debug.print("get_logs() - Old logs: {s}\n", .{path_copy});
             }
 
-            try logs.append(path_copy);
+            try logs.append(allocator, path_copy);
 
             allocator.free(fPath);
         }
@@ -189,7 +195,7 @@ fn get_logs(allocator: std.mem.Allocator, cfg: Config) !std.ArrayList([]const u8
 }
 
 fn find_current_log(allocator: std.mem.Allocator, old_logs: std.ArrayList([]const u8)) !std.ArrayList([]const u8) {
-    var current_logs = std.ArrayList([]const u8).init(allocator);
+    var current_logs = std.ArrayList([]const u8).empty;
     // because we are returning this the defer should be where the function is called.
 
     for (old_logs.items) |f| {
@@ -203,11 +209,11 @@ fn find_current_log(allocator: std.mem.Allocator, old_logs: std.ArrayList([]cons
             {
                 // This is an old log file
             } else {
-                try current_logs.append(f);
+                try current_logs.append(allocator, f);
             }
         } else {
             // no dot = current log file
-            try current_logs.append(f);
+            try current_logs.append(allocator, f);
         }
     }
     return current_logs;
@@ -238,7 +244,7 @@ fn rollover(allocator: std.mem.Allocator, cfg: Config) !void {
 
         try std.fs.cwd().rename(basePath, rpath);
     } else if (cfg.rollover == RolloverEnum.delete) {
-        try std.io.getStdErr().writeAll("Warning setting this flag will just delete the log dir!\n");
+        std.debug.print("Warning setting this flag will just delete the log dir!\n", .{});
         try std.fs.cwd().deleteTree(basePath);
     }
 }
@@ -382,7 +388,7 @@ test "get_logs pickup old_logs in test dir" {
         for (old_logs.items) |f| {
             allocator.free(f);
         }
-        old_logs.deinit();
+        old_logs.deinit(allocator);
     }
 
     // debugging print
@@ -399,19 +405,19 @@ test "find_current_log" {
 
     // Create an array list of old_logs to pass into
     // find current log
-    var old_logs = std.ArrayList([]const u8).init(allocator);
-    defer old_logs.deinit();
-    _ = try old_logs.append("/home/test/log/dmesg");
-    _ = try old_logs.append("/home/test/log/dmesg.001");
-    _ = try old_logs.append("/home/test/log/app.log.001");
-    _ = try old_logs.append("/home/test/log/dmesg.002");
-    _ = try old_logs.append("/home/test/log/app.log.000");
-    _ = try old_logs.append("/home/test/log/dmesg.000");
-    _ = try old_logs.append("/home/test/log/app.log.002");
-    _ = try old_logs.append("/home/test/log/app.log");
+    var old_logs = std.ArrayList([]const u8).empty;
+    defer old_logs.deinit(allocator);
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg");
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg.001");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.001");
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg.002");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.000");
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg.000");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.002");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log");
 
-    const cLog = try find_current_log(allocator, old_logs);
-    defer cLog.deinit();
+    var cLog = try find_current_log(allocator, old_logs);
+    defer cLog.deinit(allocator);
 
     var found_dmesg = false;
     var found_applog = false;
@@ -436,17 +442,17 @@ test "count_logs" {
 
     // Create an array list of old_logs to pass into
     // find current log
-    var old_logs = std.ArrayList([]const u8).init(allocator);
-    defer old_logs.deinit();
-    _ = try old_logs.append("/home/test/log/dmesg");
-    _ = try old_logs.append("/home/test/log/dmesg.001");
-    _ = try old_logs.append("/home/test/log/app.log.001");
-    _ = try old_logs.append("/home/test/log/dmesg.002");
-    _ = try old_logs.append("/home/test/log/app.log.000");
-    _ = try old_logs.append("/home/test/log/dmesg.000");
-    _ = try old_logs.append("/home/test/log/app.log.002");
-    _ = try old_logs.append("/home/test/log/app.log.003");
-    _ = try old_logs.append("/home/test/log/app.log");
+    var old_logs = std.ArrayList([]const u8).empty;
+    defer old_logs.deinit(allocator);
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg");
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg.001");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.001");
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg.002");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.000");
+    _ = try old_logs.append(allocator, "/home/test/log/dmesg.000");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.002");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log.003");
+    _ = try old_logs.append(allocator, "/home/test/log/app.log");
 
     const count = count_logs("/home/test/log/dmesg", old_logs);
     std.debug.print("Number of old dmesg logs: {d}\n", .{count});
@@ -493,38 +499,38 @@ test "write_logs" {
         _ = try tmp.dir.createFile(new_name, .{});
     }
 
-    var tmp_logs = std.ArrayList([]const u8).init(allocator);
+    var tmp_logs = std.ArrayList([]const u8).empty;
     defer {
         for (tmp_logs.items) |file| {
             allocator.free(file);
         }
-        tmp_logs.deinit();
+        tmp_logs.deinit(allocator);
     }
 
     cfg.log_dir = tmp_path;
-    const old_logs = try get_logs(allocator, cfg);
+    var old_logs = try get_logs(allocator, cfg);
     defer {
         for (old_logs.items) |o| {
             allocator.free(o);
         }
-        old_logs.deinit();
+        old_logs.deinit(allocator);
     }
 
     for (old_logs.items, 0..) |f, i| {
         std.debug.print("File[{d}]: {s}\n", .{ i, f });
     }
 
-    const current_logs = try find_current_log(allocator, old_logs);
-    defer current_logs.deinit();
+    var current_logs = try find_current_log(allocator, old_logs);
+    defer current_logs.deinit(allocator);
 
     try write_logs(allocator, current_logs, old_logs, cfg);
 
-    const nold_logs = try get_logs(allocator, cfg);
+    var nold_logs = try get_logs(allocator, cfg);
     defer {
         for (nold_logs.items) |ol| {
             allocator.free(ol);
         }
-        nold_logs.deinit();
+        nold_logs.deinit(allocator);
     }
     for (nold_logs.items, 0..) |f, i| {
         std.debug.print("New old_logs[{d}]: {s}\n", .{ i, f });
@@ -577,11 +583,11 @@ test "write_logs -- rollover" {
         for (files.items) |file| {
             allocator.free(file);
         }
-        files.deinit();
+        files.deinit(allocator);
     }
 
-    const current_logs = try find_current_log(allocator, files);
-    defer current_logs.deinit();
+    var current_logs = try find_current_log(allocator, files);
+    defer current_logs.deinit(allocator);
 
     try write_logs(allocator, current_logs, files, cfg);
 
@@ -626,11 +632,11 @@ test "write_logs Manual -- rollover Delete" {
         for (files.items) |file| {
             allocator.free(file);
         }
-        files.deinit();
+        files.deinit(allocator);
     }
 
-    const current_logs = try find_current_log(allocator, files);
-    defer current_logs.deinit();
+    var current_logs = try find_current_log(allocator, files);
+    defer current_logs.deinit(allocator);
 
     try write_logs(allocator, current_logs, files, cfg);
 
@@ -676,11 +682,11 @@ test "write_logs preserves timestamp" {
         for (files.items) |file| {
             allocator.free(file);
         }
-        files.deinit();
+        files.deinit(allocator);
     }
 
-    const current_logs = try find_current_log(allocator, files);
-    defer current_logs.deinit();
+    var current_logs = try find_current_log(allocator, files);
+    defer current_logs.deinit(allocator);
 
     try write_logs(allocator, current_logs, files, cfg);
 
