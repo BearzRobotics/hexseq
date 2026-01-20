@@ -1,0 +1,31 @@
+# Zig build artifacts
+zig-out/
+zig-cache/
+
+# Compiled binaries
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test or temporary files
+*.tmp
+*.log
+
+# Editor or OS files
+*.swp
+*.swo
+*.DS_Store
+*.idea/
+*.vscode/
+*.iml
+
+# Optional: backup files
+*~
+
+# by personal Notes
+dknotes
+test/logs
+test/dlogs
