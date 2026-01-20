@@ -20,19 +20,19 @@ Example
 Before:
 
 logs/
-   loga.log
-   logb
-   xorg/
-      logc
+  |- loga.log
+  |- logb
+  |- xorg/
+      |- logc
 
 
 After running the log roller:
 
 logs/
-   loga.log.000
-   logb.000
-   xorg/
-      logc.000
+ |-  loga.log.000
+ |- logb.000
+ |-  xorg/
+     |- logc.000
 
 From zero based index this supports up to 4095 backups of a file
 
