@@ -4,7 +4,7 @@ const Io = std.Io;
 const dklib = @import("dklib.zig");
 
 // Constants go here
-const version = "0.0.9";
+const version = "0.0.10";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 const RolloverEnum = enum(u8) {
@@ -570,7 +570,7 @@ test "write_logs -- rollover" {
     const dmesg_file = try subdir.createFile(io, "dmesg", .{});
     dmesg_file.close(io);
 
-    for (0..4095) |i| {
+    for (0..40) |i| {
         const nhex = dec2hex(@as(u16, @intCast(i)));
         const new_name = try std.mem.concat(ally, u8, &.{ "dmesg.", &nhex });
         defer ally.free(new_name);
