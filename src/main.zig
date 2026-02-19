@@ -566,14 +566,16 @@ test "write_logs -- rollover" {
     cfg.log_dir = tmp_path;
 
     const subdir = try root.createDirPathOpen(io, "log", .{});
-    _ = try subdir.createFile(io, "dmesg", .{});
-    subdir.close(io);
+
+    const dmesg_file = try subdir.createFile(io, "dmesg", .{});
+    dmesg_file.close(io);
 
     for (0..4095) |i| {
         const nhex = dec2hex(@as(u16, @intCast(i)));
         const new_name = try std.mem.concat(ally, u8, &.{ "dmesg.", &nhex });
         defer ally.free(new_name);
-        _ = try subdir.createFile(io, new_name, .{});
+        const f = try subdir.createFile(io, new_name, .{});
+        f.close(io);
     }
 
     var files = try get_logs(io, ally, cfg, stdout);
@@ -583,6 +585,8 @@ test "write_logs -- rollover" {
         }
         files.deinit(ally);
     }
+
+    subdir.close(io);
 
     var current_logs = try find_current_log(ally, files);
     defer current_logs.deinit(ally);
