@@ -180,7 +180,11 @@ fn get_logs(io: Io, ally: std.mem.Allocator, cfg: Config, stdout: *Io.Writer) !s
 
     try stdout.print("cfg.log_dir: {s}\n", .{cfg.log_dir});
 
-    var dir = try Io.Dir.openDirAbsolute(io, cfg.log_dir, .{ .iterate = true });
+    var dir = Io.Dir.openDirAbsolute(io, cfg.log_dir, .{ .iterate = true }) catch |err| {
+        std.debug.print("Error: could not open log dir '{s}': {}\n", .{ cfg.log_dir, err });
+        dklib.exit_with(dklib.ExitCode.usage);
+        unreachable;
+    };
 
     defer dir.close(io);
 
