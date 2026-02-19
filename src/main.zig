@@ -540,8 +540,8 @@ test "write_logs" {
     const aPath = try std.fs.path.join(ally, &.{ tmp_path, "app.log.00A" });
     defer ally.free(aPath);
 
-    _ = try Io.Dir.openDirAbsolute(io, dPath, .{});
-    _ = try Io.Dir.openDirAbsolute(io, aPath, .{});
+    _ = try Io.Dir.cwd().statFile(io, dPath, .{});
+    _ = try Io.Dir.cwd().statFile(io, aPath, .{});
 
     dklib.dktest.passed("write_logs");
 }
@@ -567,10 +567,11 @@ test "write_logs -- rollover" {
 
     const subdir = try root.createDirPathOpen(io, "log", .{});
     _ = try subdir.createFile(io, "dmesg", .{});
+    subdir.close(io);
 
     for (0..4095) |i| {
         const nhex = dec2hex(@as(u16, @intCast(i)));
-        const new_name = try std.mem.concat(ally, u8, &.{ "dmesg"[0..], "."[0..], nhex[0..] });
+        const new_name = try std.mem.concat(ally, u8, &.{ "dmesg.", &nhex });
         defer ally.free(new_name);
         _ = try subdir.createFile(io, new_name, .{});
     }
