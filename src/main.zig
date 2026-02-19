@@ -56,6 +56,9 @@ pub fn main(init: std.process.Init) !void {
         old_logs.deinit(arena);
     }
 
+    var current_logs = try find_current_log(arena, old_logs);
+    defer current_logs.deinit(arena);
+
     try stdout.flush(); // Don't forget to flush!
 }
 
@@ -154,7 +157,27 @@ fn dec2hex(input: u16) []const u8 {
     return rt;
 }
 
-fn get_logs(io: Io, allocator: std.mem.Allocator, cfg: Config, stdout: *Io.Writer) !std.ArrayList([]const u8) {
+fn count_logs(current_logs: []const u8, old_logs: std.ArrayList([]const u8)) u16 {
+    var oLC: u16 = 0;
+
+    for (old_logs.items) |f| {
+        if (std.mem.lastIndexOf(u8, f, ".")) |dot_index| {
+            const suffix = f[dot_index + 1 ..];
+            if (suffix.len == 3 and
+                std.ascii.isHex(suffix[0]) and
+                std.ascii.isHex(suffix[1]) and
+                std.ascii.isHex(suffix[2]) and
+                std.mem.eql(u8, current_logs, f[0..dot_index]))
+            {
+                oLC += 1;
+            }
+        }
+    }
+
+    return oLC;
+}
+
+fn get_logs(io: Io, ally: std.mem.Allocator, cfg: Config, stdout: *Io.Writer) !std.ArrayList([]const u8) {
     var logs = std.ArrayList([]const u8).empty;
 
     try stdout.print("cfg.log_dir: {s}\n", .{cfg.log_dir});
@@ -163,28 +186,53 @@ fn get_logs(io: Io, allocator: std.mem.Allocator, cfg: Config, stdout: *Io.Write
 
     defer dir.close(io);
 
-    var walker = try dir.walk(allocator);
+    var walker = try dir.walk(ally);
     defer walker.deinit();
 
     while (try walker.next(io)) |entry| {
         // only grab files
         if (entry.kind == .file) {
             // base + entry.path (relative path.
-            const fPath = try std.fs.path.join(allocator, &.{ cfg.log_dir, entry.path });
+            const fPath = try std.fs.path.join(ally, &.{ cfg.log_dir, entry.path });
 
             // Allocate a duplicate string since walk() gives temporary memory
             // we need to use dupe to keep the data alive past the defer of std.fs.cwd().openDir
-            const path_copy = try allocator.dupe(u8, fPath);
+            const path_copy = try ally.dupe(u8, fPath);
 
             if (cfg.debug == true) {
                 std.debug.print("get_logs() - Old logs: {s}\n", .{path_copy});
             }
 
-            try logs.append(allocator, path_copy);
+            try logs.append(ally, path_copy);
 
-            allocator.free(fPath);
+            ally.free(fPath);
         }
     }
 
     return logs;
+}
+
+fn find_current_log(ally: std.mem.Allocator, old_logs: std.ArrayList([]const u8)) !std.ArrayList([]const u8) {
+    var current_logs = std.ArrayList([]const u8).empty;
+    // because we are returning this the defer should be where the function is called.
+
+    for (old_logs.items) |f| {
+        // https://ziglang.org/documentation/0.14.0/std/#std.mem.lastIndexOf
+        if (std.mem.lastIndexOf(u8, f, ".")) |dot_index| {
+            const suffix = f[dot_index + 1 ..];
+            if (suffix.len == 3 and
+                std.ascii.isHex(suffix[0]) and
+                std.ascii.isHex(suffix[1]) and
+                std.ascii.isHex(suffix[2]))
+            {
+                // This is an old log file
+            } else {
+                try current_logs.append(ally, f);
+            }
+        } else {
+            // no dot = current log file
+            try current_logs.append(ally, f);
+        }
+    }
+    return current_logs;
 }
