@@ -51,13 +51,6 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
-    const dklib = b.dependency("dklib", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    exe.root_module.addImport("dklib", dklib.module("dklib"));
-
     // Don't know how to get this working.
     // come back to later.
     _ = exe.getEmittedAsm();

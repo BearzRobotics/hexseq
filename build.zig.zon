@@ -35,12 +35,7 @@
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
-    .dependencies = .{
-        .dklib = .{
-            .url = "git+https://github.com/BearzRobotics/dklib?tag=dklib-v0.0.3#bf07760f1c1bcd3c7dc21ea5ea6e00df195b7419",
-            .hash = "dklib-0.0.3-sUK1XQ1oAABCLKIGcF7FViF3BaUfPK334D2Xcw8DrwML",
-        },
-    },
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",
