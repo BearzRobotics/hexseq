@@ -47,12 +47,19 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(arena);
 
     const cfg = try parse_args(args, stdout);
-    _ = cfg;
+
+    var old_logs = try get_logs(io, arena, cfg, stdout);
+    defer {
+        for (old_logs.items) |f| {
+            arena.free(f);
+        }
+        old_logs.deinit(arena);
+    }
+
     try stdout.flush(); // Don't forget to flush!
 }
 
 fn parse_args(args: []const [:0]const u8, stdout: *Io.Writer) !Config {
-
     // lets create our Config Struct
     var cfg = Config{};
 
@@ -145,4 +152,39 @@ fn dec2hex(input: u16) []const u8 {
 
     const rt: []const u8 = &buffer;
     return rt;
+}
+
+fn get_logs(io: Io, allocator: std.mem.Allocator, cfg: Config, stdout: *Io.Writer) !std.ArrayList([]const u8) {
+    var logs = std.ArrayList([]const u8).empty;
+
+    try stdout.print("cfg.log_dir: {s}\n", .{cfg.log_dir});
+
+    var dir = try Io.Dir.openDirAbsolute(io, cfg.log_dir, .{ .iterate = true });
+
+    defer dir.close(io);
+
+    var walker = try dir.walk(allocator);
+    defer walker.deinit();
+
+    while (try walker.next(io)) |entry| {
+        // only grab files
+        if (entry.kind == .file) {
+            // base + entry.path (relative path.
+            const fPath = try std.fs.path.join(allocator, &.{ cfg.log_dir, entry.path });
+
+            // Allocate a duplicate string since walk() gives temporary memory
+            // we need to use dupe to keep the data alive past the defer of std.fs.cwd().openDir
+            const path_copy = try allocator.dupe(u8, fPath);
+
+            if (cfg.debug == true) {
+                std.debug.print("get_logs() - Old logs: {s}\n", .{path_copy});
+            }
+
+            try logs.append(allocator, path_copy);
+
+            allocator.free(fPath);
+        }
+    }
+
+    return logs;
 }
