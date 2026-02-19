@@ -4,7 +4,7 @@ const Io = std.Io;
 const dklib = @import("dklib.zig");
 
 // Constants go here
-const version = "0.0.10";
+const version = "0.0.11";
 const hex = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 const RolloverEnum = enum(u8) {
@@ -27,9 +27,6 @@ const Config = struct {
 };
 
 pub fn main(init: std.process.Init) !void {
-    // Prints to stderr, unbuffered, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
     // This is appropriate for anything that lives as long as the process.
     const arena: std.mem.Allocator = init.arena.allocator();
 
